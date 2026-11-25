@@ -3,37 +3,30 @@ package com.nexus.mapper
 
 import android.app.Activity
 import android.os.Bundle
-import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.content.Context
 import android.hardware.input.InputManager
-import android.view.Gravity
 import android.view.InputDevice
 import android.view.KeyEvent
-import android.view.MotionEvent
+import android.view.Gravity
 import android.view.View
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.SeekBar
-import android.widget.TextView
+import android.widget.*
+import android.graphics.drawable.GradientDrawable
+import rikka.shizuku.Shizuku
 
 class MainActivity : Activity(), InputManager.InputDeviceListener {
 
-    private lateinit var inputManager: InputManager
-    private lateinit var statusText: TextView
-    private lateinit var deviceText: TextView
-    private lateinit var editor: LinearLayout
-    private lateinit var verticalLabel: TextView
-    private lateinit var horizontalLabel: TextView
-    private lateinit var profileLabel: TextView
+    private val background = Color.rgb(8, 11, 10)
+    private val surface = Color.rgb(18, 24, 21)
+    private val accent = Color.rgb(0, 255, 145)
+    private val muted = Color.rgb(150, 165, 157)
+    private val white = Color.WHITE
 
-    private var waitingAction: String? = null
-    private var verticalValue = 50
-    private var horizontalValue = 50
-    private var profile = "DEFAULT"
+    private lateinit var inputManager: InputManager
+    private lateinit var deviceText: TextView
+    private lateinit var shizukuText: TextView
+    private lateinit var mappingText: TextView
 
     private val actions = listOf(
         "MOVE_FORWARD",
@@ -46,556 +39,495 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         "INTERACT"
     )
 
-    private val prefs by lazy {
-        getSharedPreferences("nexus_mapping", Context.MODE_PRIVATE)
-    }
+    private val binderReceivedListener =
+        Shizuku.OnBinderReceivedListener {
+            runOnUiThread { refreshShizukuStatus() }
+        }
 
-    private val background = Color.rgb(8, 12, 17)
-    private val panel = Color.rgb(18, 25, 32)
-    private val panelLight = Color.rgb(25, 34, 42)
-    private val accent = Color.rgb(0, 240, 170)
-    private val white = Color.WHITE
-    private val muted = Color.rgb(155, 170, 180)
+    private val binderDeadListener =
+        Shizuku.OnBinderDeadListener {
+            runOnUiThread { refreshShizukuStatus() }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        inputManager = getSystemService(
-            Context.INPUT_SERVICE
-        ) as InputManager
+        inputManager =
+            getSystemService(Context.INPUT_SERVICE) as InputManager
 
-        verticalValue = prefs.getInt("vertical_sensitivity", 50)
-        horizontalValue = prefs.getInt("horizontal_sensitivity", 50)
-        profile = prefs.getString("recoil_profile", "DEFAULT") ?: "DEFAULT"
+        window.statusBarColor = background
+        window.navigationBarColor = background
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(20), dp(18), dp(20))
-            setBackgroundColor(this@MainActivity.background)
-        }
+        val scroll = ScrollView(this)
+        scroll.setBackgroundColor(background)
 
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-            addView(root)
-        }
+        val root = LinearLayout(this)
+        root.orientation = LinearLayout.VERTICAL
+        root.setPadding(dp(20), dp(25), dp(20), dp(30))
 
-        val brand = TextView(this).apply {
-            text = "NEXUS"
-            textSize = 34f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            setTextColor(accent)
-        }
+        scroll.addView(root)
 
-        val title = TextView(this).apply {
-            text = "MAPPER"
-            textSize = 22f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            setTextColor(white)
-        }
-
-        val subtitle = TextView(this).apply {
-            text = "GAMING CONTROL CONFIGURATION"
-            textSize = 11f
-            letterSpacing = 1.4f
-            gravity = Gravity.CENTER
-            setTextColor(muted)
-            setPadding(0, dp(5), 0, dp(20))
-        }
-
-        val statusCard = makeCard()
-
-        val statusTitle = makeText(
-            "SYSTEM STATUS",
-            11f,
+        val brand = makeText(
+            "NEXUS / MAPPER",
+            14f,
             accent,
             true
         )
 
-        statusText = makeText(
-            "● SYSTEM READY",
-            15f,
+        val title = makeText(
+            "CONTROL CENTER",
+            27f,
             white,
             true
         )
 
-        statusText.setPadding(0, dp(8), 0, 0)
+        val subtitle = makeText(
+            "External device configuration platform",
+            12f,
+            muted,
+            false
+        )
 
-        statusCard.addView(statusTitle)
-        statusCard.addView(statusText)
+        root.addView(brand)
+        addGap(root, 12)
+        root.addView(title)
+        addGap(root, 5)
+        root.addView(subtitle)
+        addGap(root, 24)
 
-        val deviceCard = makeCard()
+        val statusCard = makeCard()
 
-        deviceCard.addView(
-            makeText("CONNECTED DEVICES", 13f, accent, true)
+        statusCard.addView(
+            makeText("SYSTEM STATUS", 13f, accent, true)
         )
 
         deviceText = makeText(
-            "Checking devices...",
+            "Checking external devices...",
+            13f,
+            white,
+            false
+        )
+
+        statusCard.addView(deviceText)
+        root.addView(statusCard)
+
+        addGap(root, 14)
+
+        val shizukuCard = makeCard()
+
+        shizukuCard.addView(
+            makeText("SHIZUKU SERVICE", 13f, accent, true)
+        )
+
+        shizukuText = makeText(
+            "Checking Shizuku connection...",
             13f,
             muted,
             false
         )
 
-        deviceText.setPadding(0, dp(10), 0, 0)
-        deviceCard.addView(deviceText)
+        shizukuCard.addView(shizukuText)
+        root.addView(shizukuCard)
 
-        editor = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        addGap(root, 14)
+
+        val mappingCard = makeCard()
+
+        mappingCard.addView(
+            makeText("CONTROL CONFIGURATION", 13f, accent, true)
+        )
+
+        mappingText = makeText(
+            "Local keyboard configuration",
+            12f,
+            muted,
+            false
+        )
+
+        mappingCard.addView(mappingText)
+
+        val editorButton = makeButton("OPEN CONFIGURATION")
+
+        editorButton.setOnClickListener {
+            showMappingEditor()
         }
 
-        root.addView(brand)
-        root.addView(title)
-        root.addView(subtitle)
-        root.addView(statusCard, matchWidth())
-        addGap(root, 12)
-        root.addView(deviceCard, matchWidth())
-        addGap(root, 12)
-        root.addView(editor, matchWidth())
+        mappingCard.addView(editorButton)
+        root.addView(mappingCard)
+
+        addGap(root, 14)
+
+        val sensitivityCard = makeCard()
+
+        sensitivityCard.addView(
+            makeText("SENSITIVITY PRESETS", 13f, accent, true)
+        )
+
+        addGap(sensitivityCard, 10)
+
+        val profileSpinner = Spinner(this)
+
+        val profiles = arrayOf(
+            "DEFAULT",
+            "PRECISE",
+            "SMOOTH"
+        )
+
+        profileSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            profiles
+        )
+
+        sensitivityCard.addView(profileSpinner)
+
+        val verticalValue = getPreferences(0)
+            .getInt("vertical_sensitivity", 50)
+
+        val horizontalValue = getPreferences(0)
+            .getInt("horizontal_sensitivity", 50)
+
+        sensitivityCard.addView(
+            makeText("Vertical sensitivity", 12f, white, false)
+        )
+
+        val verticalSlider = SeekBar(this)
+        verticalSlider.max = 100
+        verticalSlider.progress = verticalValue
+        sensitivityCard.addView(verticalSlider)
+
+        sensitivityCard.addView(
+            makeText("Horizontal sensitivity", 12f, white, false)
+        )
+
+        val horizontalSlider = SeekBar(this)
+        horizontalSlider.max = 100
+        horizontalSlider.progress = horizontalValue
+        sensitivityCard.addView(horizontalSlider)
+
+        val prefs = getPreferences(0)
+
+        verticalSlider.setOnSeekBarChangeListener(
+            object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(
+                    seekBar: SeekBar?,
+                    progress: Int,
+                    fromUser: Boolean
+                ) {
+                    prefs.edit()
+                        .putInt("vertical_sensitivity", progress)
+                        .apply()
+                }
+
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            }
+        )
+
+        horizontalSlider.setOnSeekBarChangeListener(
+            object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(
+                    seekBar: SeekBar?,
+                    progress: Int,
+                    fromUser: Boolean
+                ) {
+                    prefs.edit()
+                        .putInt("horizontal_sensitivity", progress)
+                        .apply()
+                }
+
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            }
+        )
+
+        profileSpinner.onItemSelectedListener =
+            object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: AdapterView<*>?,
+                    view: View?,
+                    position: Int,
+                    id: Long
+                ) {
+                    prefs.edit()
+                        .putString("recoil_profile", profiles[position])
+                        .apply()
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) {}
+            }
+
+        root.addView(sensitivityCard)
+
+        addGap(root, 20)
+
+        val footer = makeText(
+            "NEXUS MAPPER • VERSION 1.0",
+            11f,
+            muted,
+            false
+        )
+
+        footer.gravity = Gravity.CENTER
+        root.addView(footer)
 
         setContentView(scroll)
 
-        buildEditor()
         refreshDevices()
+        refreshShizukuStatus()
 
         inputManager.registerInputDeviceListener(this, null)
-    }
 
-    private fun dp(value: Int): Int {
-        return (value * resources.displayMetrics.density).toInt()
-    }
+        Shizuku.addBinderReceivedListenerSticky(
+            binderReceivedListener
+        )
 
-    private fun matchWidth(): LinearLayout.LayoutParams {
-        return LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
+        Shizuku.addBinderDeadListener(
+            binderDeadListener
         )
     }
 
-    private fun makeCard(): LinearLayout {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(16))
-            background = rounded(panel, 16)
+    private fun showMappingEditor() {
+        val dialog = android.app.Dialog(this)
+
+        val container = LinearLayout(this)
+        container.orientation = LinearLayout.VERTICAL
+        container.setPadding(dp(20), dp(20), dp(20), dp(20))
+        container.setBackgroundColor(surface)
+
+        val title = makeText(
+            "BUTTON CONFIGURATION",
+            18f,
+            accent,
+            true
+        )
+
+        container.addView(title)
+        addGap(container, 12)
+
+        val prefs = getPreferences(0)
+
+        for (action in actions) {
+            val current = prefs.getString(
+                "mapping_$action",
+                "NOT SET"
+            ) ?: "NOT SET"
+
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.gravity = Gravity.CENTER_VERTICAL
+
+            val label = makeText(
+                action.replace("_", " "),
+                12f,
+                white,
+                true
+            )
+
+            row.addView(
+                label,
+                LinearLayout.LayoutParams(0, dp(48), 1f)
+            )
+
+            val value = makeText(
+                current,
+                12f,
+                accent,
+                true
+            )
+
+            row.addView(value)
+
+            row.setOnClickListener {
+                showKeyPicker(action, value)
+            }
+
+            container.addView(row)
+
+            val divider = View(this)
+            divider.setBackgroundColor(Color.DKGRAY)
+
+            container.addView(
+                divider,
+                LinearLayout.LayoutParams(
+                    -1,
+                    dp(1)
+                )
+            )
+        }
+
+        val close = makeButton("CLOSE")
+        close.setOnClickListener { dialog.dismiss() }
+
+        addGap(container, 12)
+        container.addView(close)
+
+        dialog.setContentView(container)
+
+        dialog.window?.setBackgroundDrawableResource(
+            android.R.color.transparent
+        )
+
+        dialog.show()
+
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.90).toInt(),
+            -2
+        )
+    }
+
+    private fun showKeyPicker(
+        action: String,
+        value: TextView
+    ) {
+        val choices = arrayOf(
+            "W", "A", "S", "D",
+            "SPACE", "E", "R", "F",
+            "Q", "SHIFT", "CTRL",
+            "ALT", "1", "2", "3",
+            "4", "5", "6", "7", "8", "9"
+        )
+
+        AlertDialog.Builder(this)
+            .setTitle("Select key for $action")
+            .setItems(choices) { _, which ->
+                val selected = choices[which]
+
+                getPreferences(0)
+                    .edit()
+                    .putString("mapping_$action", selected)
+                    .apply()
+
+                value.text = selected
+                refreshMappingSummary()
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    private fun refreshMappingSummary() {
+        val prefs = getPreferences(0)
+
+        val configured = actions.count {
+            prefs.getString("mapping_$it", "NOT SET") != "NOT SET"
+        }
+
+        mappingText.text =
+            "$configured / ${actions.size} controls configured"
+    }
+
+    private fun refreshDevices() {
+        val ids = inputManager.inputDeviceIds
+
+        val devices = ids.mapNotNull {
+            inputManager.getInputDevice(it)
+        }.filter {
+            !it.isVirtual
+        }
+
+        val external = devices.filter {
+            it.sources and (
+                android.view.InputDevice.SOURCE_KEYBOARD or
+                android.view.InputDevice.SOURCE_MOUSE
+            ) != 0
+        }
+
+        deviceText.text = if (external.isEmpty()) {
+            "No external device detected"
+        } else {
+            external.joinToString("\n") {
+                "● ${it.name}"
+            }
+        }
+
+        refreshMappingSummary()
+    }
+
+    private fun refreshShizukuStatus() {
+        val connected = try {
+            Shizuku.pingBinder()
+        } catch (e: Exception) {
+            false
+        }
+
+        if (connected) {
+            shizukuText.text = "● SHIZUKU SERVICE CONNECTED"
+            shizukuText.setTextColor(accent)
+        } else {
+            shizukuText.text = "● SHIZUKU SERVICE NOT CONNECTED"
+            shizukuText.setTextColor(Color.RED)
         }
     }
 
-    private fun rounded(color: Int, radius: Int): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(color)
-            cornerRadius = dp(radius).toFloat()
-            setStroke(dp(1), Color.rgb(39, 55, 63))
-        }
+    private fun makeCard(): LinearLayout {
+        val card = LinearLayout(this)
+        card.orientation = LinearLayout.VERTICAL
+        card.setPadding(dp(16), dp(16), dp(16), dp(16))
+
+        val shape = GradientDrawable()
+        shape.setColor(surface)
+        shape.cornerRadius = dp(14).toFloat()
+        shape.setStroke(dp(1), Color.rgb(35, 55, 44))
+
+        card.background = shape
+
+        return card
     }
 
     private fun makeText(
-        value: String,
+        text: String,
         size: Float,
         color: Int,
         bold: Boolean
     ): TextView {
         return TextView(this).apply {
-            text = value
+            this.text = text
             textSize = size
             setTextColor(color)
 
             if (bold) {
                 typeface = Typeface.DEFAULT_BOLD
             }
+
+            setPadding(0, dp(5), 0, dp(5))
         }
     }
 
-    private fun addGap(parent: LinearLayout, height: Int) {
-        parent.addView(
-            View(this),
-            LinearLayout.LayoutParams(1, dp(height))
-        )
-    }
-
-    private fun makeButton(
-        value: String,
-        primary: Boolean = false,
-        onClick: () -> Unit
-    ): Button {
+    private fun makeButton(text: String): Button {
         return Button(this).apply {
-            text = value
+            this.text = text
+            setTextColor(background)
             textSize = 12f
-            isAllCaps = false
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(if (primary) this@MainActivity.background else accent)
-
-            this.background = rounded(
-                if (primary) accent else panelLight,
-                12
-            )
-
-            setPadding(dp(12), dp(8), dp(12), dp(8))
-            setOnClickListener { onClick() }
+            setBackgroundColor(accent)
         }
     }
 
-    private fun addHeading(value: String) {
-        val heading = makeText(
-            value,
-            16f,
-            white,
-            true
-        )
+    private fun addGap(
+        parent: LinearLayout,
+        value: Int
+    ) {
+        val gap = View(this)
 
-        heading.setPadding(0, dp(18), 0, dp(12))
-        editor.addView(heading)
+        parent.addView(
+            gap,
+            LinearLayout.LayoutParams(
+                1,
+                dp(value)
+            )
+        )
     }
 
-    private fun buildEditor() {
-        editor.removeAllViews()
-
-        addHeading("01  /  CONTROL CONFIGURATION")
-
-        for (action in actions) {
-
-            val card = makeCard()
-
-            val name = makeText(
-                action.replace("_", " "),
-                15f,
-                white,
-                true
-            )
-
-            val key = prefs.getInt("mapping_$action", 0)
-
-            val keyLabel = makeText(
-                if (key == 0) {
-                    "ASSIGNED KEY: NOT SET"
-                } else {
-                    "ASSIGNED KEY: ${keyName(key)}"
-                },
-                12f,
-                accent,
-                false
-            )
-
-            keyLabel.setPadding(0, dp(7), 0, dp(10))
-
-            val setButton = makeButton("SET KEY") {
-                waitingAction = action
-                statusText.text =
-                    "● PRESS A KEY FOR ${action.replace("_", " ")}"
-            }
-
-            card.addView(name)
-            card.addView(keyLabel)
-            card.addView(setButton, matchWidth())
-
-            editor.addView(card, matchWidth())
-            addGap(editor, 9)
-        }
-
-        buildSensitivityPanel()
+    private fun dp(value: Int): Int {
+        return (
+            value * resources.displayMetrics.density
+        ).toInt()
     }
 
-    private fun buildSensitivityPanel() {
-
-        addHeading("02  /  RECOIL SETTINGS")
-
-        val card = makeCard()
-
-        card.addView(
-            makeText(
-                "LOCAL SENSITIVITY PRESETS",
-                12f,
-                accent,
-                true
-            )
+    private fun matchWidth(): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(
+            -1,
+            -2
         )
-
-        addGap(card, 16)
-
-        verticalLabel = makeText(
-            "Vertical Sensitivity: $verticalValue",
-            14f,
-            white,
-            true
-        )
-
-        card.addView(verticalLabel)
-
-        val verticalSeek = SeekBar(this).apply {
-            max = 99
-            progress = (verticalValue - 1).coerceIn(0, 99)
-            progressTintList = ColorStateList.valueOf(accent)
-            thumbTintList = ColorStateList.valueOf(accent)
-
-            setOnSeekBarChangeListener(
-                object : SeekBar.OnSeekBarChangeListener {
-
-                    override fun onProgressChanged(
-                        seekBar: SeekBar?,
-                        progress: Int,
-                        fromUser: Boolean
-                    ) {
-                        verticalValue = progress + 1
-                        verticalLabel.text =
-                            "Vertical Sensitivity: $verticalValue"
-                    }
-
-                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-                }
-            )
-        }
-
-        card.addView(verticalSeek)
-
-        addGap(card, 16)
-
-        horizontalLabel = makeText(
-            "Horizontal Sensitivity: $horizontalValue",
-            14f,
-            white,
-            true
-        )
-
-        card.addView(horizontalLabel)
-
-        val horizontalSeek = SeekBar(this).apply {
-            max = 99
-            progress = (horizontalValue - 1).coerceIn(0, 99)
-            progressTintList = ColorStateList.valueOf(accent)
-            thumbTintList = ColorStateList.valueOf(accent)
-
-            setOnSeekBarChangeListener(
-                object : SeekBar.OnSeekBarChangeListener {
-
-                    override fun onProgressChanged(
-                        seekBar: SeekBar?,
-                        progress: Int,
-                        fromUser: Boolean
-                    ) {
-                        horizontalValue = progress + 1
-                        horizontalLabel.text =
-                            "Horizontal Sensitivity: $horizontalValue"
-                    }
-
-                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-                }
-            )
-        }
-
-        card.addView(horizontalSeek)
-
-        addGap(card, 18)
-
-        profileLabel = makeText(
-            "ACTIVE PROFILE: $profile",
-            14f,
-            accent,
-            true
-        )
-
-        card.addView(profileLabel)
-
-        val profileRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-
-        val profiles = listOf("DEFAULT", "PRECISE", "SMOOTH")
-
-        for (item in profiles) {
-
-            val button = makeButton(item) {
-
-                profile = item
-
-                when (item) {
-                    "DEFAULT" -> {
-                        verticalSeek.progress = 49
-                        horizontalSeek.progress = 49
-                    }
-
-                    "PRECISE" -> {
-                        verticalSeek.progress = 39
-                        horizontalSeek.progress = 39
-                    }
-
-                    "SMOOTH" -> {
-                        verticalSeek.progress = 59
-                        horizontalSeek.progress = 59
-                    }
-                }
-
-                profileLabel.text = "ACTIVE PROFILE: $profile"
-                statusText.text = "● PROFILE SELECTED: $profile"
-            }
-
-            val params = LinearLayout.LayoutParams(
-                0,
-                dp(48),
-                1f
-            )
-
-            params.setMargins(dp(3), dp(8), dp(3), dp(8))
-
-            profileRow.addView(button, params)
-        }
-
-        card.addView(profileRow)
-
-        addGap(card, 10)
-
-        val saveButton = makeButton(
-            "SAVE CONFIGURATION",
-            true
-        ) {
-
-            prefs.edit()
-                .putInt("vertical_sensitivity", verticalValue)
-                .putInt("horizontal_sensitivity", horizontalValue)
-                .putString("recoil_profile", profile)
-                .apply()
-
-            statusText.text = "● CONFIGURATION SAVED"
-        }
-
-        card.addView(saveButton, matchWidth())
-
-        addGap(card, 8)
-
-        val resetButton = makeButton("RESET TO DEFAULT") {
-
-            profile = "DEFAULT"
-
-            verticalSeek.progress = 49
-            horizontalSeek.progress = 49
-
-            profileLabel.text = "ACTIVE PROFILE: DEFAULT"
-
-            prefs.edit()
-                .putInt("vertical_sensitivity", 50)
-                .putInt("horizontal_sensitivity", 50)
-                .putString("recoil_profile", "DEFAULT")
-                .apply()
-
-            statusText.text = "● SETTINGS RESET"
-        }
-
-        card.addView(resetButton, matchWidth())
-
-        addGap(card, 12)
-
-        card.addView(
-            makeText(
-                "These are local presets. They do not automatically control game recoil or change game settings.",
-                11f,
-                muted,
-                false
-            )
-        )
-
-        editor.addView(card, matchWidth())
-
-        addGap(editor, 20)
-
-        val footer = makeText(
-            "NEXUS MAPPER  •  VERSION 1.0",
-            11f,
-            muted,
-            true
-        )
-
-        footer.gravity = Gravity.CENTER
-        footer.setPadding(0, dp(12), 0, dp(20))
-
-        editor.addView(footer)
-    }
-
-    private fun keyName(keyCode: Int): String {
-        return if (keyCode == KeyEvent.KEYCODE_SPACE) {
-            "SPACE"
-        } else {
-            KeyEvent.keyCodeToString(keyCode)
-                .removePrefix("KEYCODE_")
-        }
-    }
-
-    private fun refreshDevices() {
-
-        val result = StringBuilder()
-        var count = 0
-
-        for (id in inputManager.inputDeviceIds) {
-
-            val device = inputManager.getInputDevice(id) ?: continue
-
-            if (!device.isExternal) continue
-
-            val mouse = device.supportsSource(InputDevice.SOURCE_MOUSE)
-            val keyboard = device.supportsSource(InputDevice.SOURCE_KEYBOARD)
-
-            if (mouse || keyboard) {
-                count++
-                result.append("● ")
-                    .append(device.name)
-                    .append("\n")
-            }
-        }
-
-        if (count == 0) {
-            result.append("No external device detected")
-        } else {
-            result.append("\n$count external device(s) detected")
-        }
-
-        deviceText.text = result.toString()
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-
-        if (event.device?.isExternal != true) {
-            return super.dispatchKeyEvent(event)
-        }
-
-        if (
-            event.action == KeyEvent.ACTION_DOWN &&
-            event.repeatCount == 0
-        ) {
-
-            val keyCode = event.keyCode
-            val action = waitingAction
-
-            if (action != null) {
-
-                prefs.edit()
-                    .putInt("mapping_$action", keyCode)
-                    .apply()
-
-                waitingAction = null
-
-                statusText.text = "● SAVED: ${keyName(keyCode)}"
-
-                buildEditor()
-
-                return true
-            }
-
-            statusText.text = "● KEYBOARD INPUT: ${keyName(keyCode)}"
-            return true
-        }
-
-        return super.dispatchKeyEvent(event)
-    }
-
-    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
-
-        if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
-            statusText.text = "● MOUSE INPUT DETECTED"
-            return true
-        }
-
-        return super.onGenericMotionEvent(event)
     }
 
     override fun onInputDeviceAdded(deviceId: Int) {
@@ -612,6 +544,15 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
 
     override fun onDestroy() {
         inputManager.unregisterInputDeviceListener(this)
+
+        Shizuku.removeBinderReceivedListener(
+            binderReceivedListener
+        )
+
+        Shizuku.removeBinderDeadListener(
+            binderDeadListener
+        )
+
         super.onDestroy()
     }
 }
