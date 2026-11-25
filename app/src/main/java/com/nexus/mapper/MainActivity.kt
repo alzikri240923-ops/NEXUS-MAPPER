@@ -119,7 +119,6 @@ class MainActivity : Activity(),
         editor.removeAllViews()
 
         for (action in actions) {
-
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(12, 12, 12, 12)
@@ -138,7 +137,7 @@ class MainActivity : Activity(),
                 text = if (key == 0) {
                     "Assigned key: NOT SET"
                 } else {
-                    "Assigned key: ${KeyEvent.keyCodeToString(key)}"
+                    "Assigned key: ${keyName(key)}"
                 }
                 textSize = 13f
                 setTextColor(accent)
@@ -167,6 +166,15 @@ class MainActivity : Activity(),
                     bottomMargin = 12
                 }
             )
+        }
+    }
+
+    private fun keyName(keyCode: Int): String {
+        return if (keyCode == KeyEvent.KEYCODE_SPACE) {
+            "SPACE"
+        } else {
+            KeyEvent.keyCodeToString(keyCode)
+                .removePrefix("KEYCODE_")
         }
     }
 
@@ -201,31 +209,35 @@ class MainActivity : Activity(),
         deviceText.text = result.toString()
     }
 
-    override fun onKeyDown(
-        keyCode: Int,
-        event: KeyEvent
-    ): Boolean {
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.device?.isExternal != true) {
+            return super.dispatchKeyEvent(event)
+        }
 
-        val action = waitingAction
+        if (event.action == KeyEvent.ACTION_DOWN &&
+            event.repeatCount == 0) {
 
-        if (action != null) {
-            prefs.edit()
-                .putInt("mapping_$action", keyCode)
-                .apply()
+            val keyCode = event.keyCode
+            val action = waitingAction
 
-            waitingAction = null
+            if (action != null) {
+                prefs.edit()
+                    .putInt("mapping_$action", keyCode)
+                    .apply()
 
-            statusText.text =
-                "SAVED: ${KeyEvent.keyCodeToString(keyCode)}"
+                waitingAction = null
 
-            buildEditor()
+                statusText.text = "SAVED: ${keyName(keyCode)}"
+
+                buildEditor()
+                return true
+            }
+
+            statusText.text = "KEYBOARD INPUT: ${keyName(keyCode)}"
             return true
         }
 
-        statusText.text =
-            "KEYBOARD INPUT: ${KeyEvent.keyCodeToString(keyCode)}"
-
-        return true
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onGenericMotionEvent(
