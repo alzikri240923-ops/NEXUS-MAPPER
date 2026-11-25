@@ -443,7 +443,6 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
 
     refreshMappingSummary()
 }
-    }
 
     private fun refreshShizukuStatus() {
         val connected = try {
