@@ -14,16 +14,22 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.SeekBar
 
-class MainActivity : Activity(),
-    InputManager.InputDeviceListener {
+class MainActivity : Activity(), InputManager.InputDeviceListener {
 
     private lateinit var inputManager: InputManager
     private lateinit var statusText: TextView
     private lateinit var deviceText: TextView
     private lateinit var editor: LinearLayout
+    private lateinit var verticalLabel: TextView
+    private lateinit var horizontalLabel: TextView
+    private lateinit var profileLabel: TextView
 
     private var waitingAction: String? = null
+    private var verticalValue = 50
+    private var horizontalValue = 50
+    private var profile = "DEFAULT"
 
     private val actions = listOf(
         "MOVE_FORWARD",
@@ -50,6 +56,10 @@ class MainActivity : Activity(),
             Context.INPUT_SERVICE
         ) as InputManager
 
+        verticalValue = prefs.getInt("vertical_sensitivity", 50)
+        horizontalValue = prefs.getInt("horizontal_sensitivity", 50)
+        profile = prefs.getString("recoil_profile", "DEFAULT") ?: "DEFAULT"
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 30, 24, 24)
@@ -64,8 +74,8 @@ class MainActivity : Activity(),
         }
 
         val subtitle = TextView(this).apply {
-            text = "KEYMAPPING EDITOR"
-            textSize = 14f
+            text = "KEYMAPPING & SENSITIVITY EDITOR"
+            textSize = 13f
             gravity = Gravity.CENTER
             setTextColor(accent)
         }
@@ -85,13 +95,6 @@ class MainActivity : Activity(),
             setPadding(0, 10, 0, 20)
         }
 
-        val heading = TextView(this).apply {
-            text = "CONTROL CONFIGURATION"
-            textSize = 17f
-            setTextColor(Color.WHITE)
-            setPadding(0, 15, 0, 15)
-        }
-
         editor = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -104,19 +107,28 @@ class MainActivity : Activity(),
         root.addView(subtitle)
         root.addView(deviceText)
         root.addView(statusText)
-        root.addView(heading)
         root.addView(scroll)
 
         setContentView(root)
 
         buildEditor()
         refreshDevices()
-
         inputManager.registerInputDeviceListener(this, null)
+    }
+
+    private fun addHeading(text: String) {
+        editor.addView(TextView(this).apply {
+            this.text = text
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            setPadding(0, 20, 0, 12)
+        })
     }
 
     private fun buildEditor() {
         editor.removeAllViews()
+
+        addHeading("CONTROL CONFIGURATION")
 
         for (action in actions) {
             val row = LinearLayout(this).apply {
@@ -157,16 +169,153 @@ class MainActivity : Activity(),
             row.addView(keyLabel)
             row.addView(setButton)
 
-            editor.addView(
-                row,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    bottomMargin = 12
-                }
-            )
+            editor.addView(row)
+            addSpace(12)
         }
+
+        buildSensitivityPanel()
+    }
+
+    private fun addSpace(height: Int) {
+        editor.addView(TextView(this), LinearLayout.LayoutParams(
+            1, height
+        ))
+    }
+
+    private fun buildSensitivityPanel() {
+        addHeading("RECOIL SETTINGS")
+
+        val info = TextView(this).apply {
+            text = "LOCAL SENSITIVITY PRESET"
+            textSize = 12f
+            setTextColor(accent)
+        }
+        editor.addView(info)
+
+        verticalLabel = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            textSize = 14f
+        }
+        editor.addView(verticalLabel)
+
+        val verticalSeek = SeekBar(this).apply {
+            max = 99
+            progress = verticalValue - 1
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(
+                    seekBar: SeekBar?, progress: Int, fromUser: Boolean
+                ) {
+                    verticalValue = progress + 1
+                    verticalLabel.text =
+                        "Vertical Sensitivity: $verticalValue"
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            })
+        }
+        editor.addView(verticalSeek)
+
+        horizontalLabel = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            setPadding(0, 12, 0, 0)
+        }
+        editor.addView(horizontalLabel)
+
+        val horizontalSeek = SeekBar(this).apply {
+            max = 99
+            progress = horizontalValue - 1
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(
+                    seekBar: SeekBar?, progress: Int, fromUser: Boolean
+                ) {
+                    horizontalValue = progress + 1
+                    horizontalLabel.text =
+                        "Horizontal Sensitivity: $horizontalValue"
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            })
+        }
+        editor.addView(horizontalSeek)
+
+        profileLabel = TextView(this).apply {
+            text = "Recoil Profile: $profile"
+            textSize = 15f
+            setTextColor(accent)
+            setPadding(0, 18, 0, 8)
+        }
+        editor.addView(profileLabel)
+
+        val profiles = listOf("DEFAULT", "PRECISE", "SMOOTH")
+        for (item in profiles) {
+            val button = Button(this).apply {
+                text = item
+                setOnClickListener {
+                    profile = item
+                    profileLabel.text = "Recoil Profile: $profile"
+                    when (item) {
+                        "DEFAULT" -> {
+                            verticalSeek.progress = 49
+                            horizontalSeek.progress = 49
+                        }
+                        "PRECISE" -> {
+                            verticalSeek.progress = 39
+                            horizontalSeek.progress = 39
+                        }
+                        "SMOOTH" -> {
+                            verticalSeek.progress = 59
+                            horizontalSeek.progress = 59
+                        }
+                    }
+                }
+            }
+            editor.addView(button)
+        }
+
+        val saveButton = Button(this).apply {
+            text = "SAVE CONFIGURATION"
+            setOnClickListener {
+                prefs.edit()
+                    .putInt("vertical_sensitivity", verticalValue)
+                    .putInt("horizontal_sensitivity", horizontalValue)
+                    .putString("recoil_profile", profile)
+                    .apply()
+
+                statusText.text = "SENSITIVITY CONFIGURATION SAVED"
+            }
+        }
+        editor.addView(saveButton)
+
+        val resetButton = Button(this).apply {
+            text = "RESET TO DEFAULT"
+            setOnClickListener {
+                profile = "DEFAULT"
+                verticalSeek.progress = 49
+                horizontalSeek.progress = 49
+                profileLabel.text = "Recoil Profile: DEFAULT"
+
+                prefs.edit()
+                    .putInt("vertical_sensitivity", 50)
+                    .putInt("horizontal_sensitivity", 50)
+                    .putString("recoil_profile", "DEFAULT")
+                    .apply()
+
+                statusText.text = "SETTINGS RESET"
+            }
+        }
+        editor.addView(resetButton)
+
+        val note = TextView(this).apply {
+            text = "Note: These are local presets. They do not automatically control game recoil or change game settings."
+            textSize = 12f
+            setTextColor(Color.LTGRAY)
+            setPadding(0, 14, 0, 20)
+        }
+        editor.addView(note)
+
+        verticalLabel.text = "Vertical Sensitivity: $verticalValue"
+        horizontalLabel.text = "Horizontal Sensitivity: $horizontalValue"
     }
 
     private fun keyName(keyCode: Int): String {
@@ -183,18 +332,11 @@ class MainActivity : Activity(),
         var count = 0
 
         for (id in inputManager.inputDeviceIds) {
-            val device = inputManager.getInputDevice(id)
-                ?: continue
-
+            val device = inputManager.getInputDevice(id) ?: continue
             if (!device.isExternal) continue
 
-            val mouse = device.supportsSource(
-                InputDevice.SOURCE_MOUSE
-            )
-
-            val keyboard = device.supportsSource(
-                InputDevice.SOURCE_KEYBOARD
-            )
+            val mouse = device.supportsSource(InputDevice.SOURCE_MOUSE)
+            val keyboard = device.supportsSource(InputDevice.SOURCE_KEYBOARD)
 
             if (mouse || keyboard) {
                 count++
@@ -226,9 +368,7 @@ class MainActivity : Activity(),
                     .apply()
 
                 waitingAction = null
-
                 statusText.text = "SAVED: ${keyName(keyCode)}"
-
                 buildEditor()
                 return true
             }
@@ -240,9 +380,7 @@ class MainActivity : Activity(),
         return super.dispatchKeyEvent(event)
     }
 
-    override fun onGenericMotionEvent(
-        event: MotionEvent
-    ): Boolean {
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
             statusText.text = "MOUSE INPUT DETECTED"
             return true
