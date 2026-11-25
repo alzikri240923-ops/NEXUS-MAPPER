@@ -2,6 +2,7 @@
 package com.nexus.mapper
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
@@ -417,30 +418,31 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     }
 
     private fun refreshDevices() {
-        val ids = inputManager.inputDeviceIds
+    val ids: IntArray = inputManager.getInputDeviceIds()
 
-        val devices = ids.mapNotNull {
-            inputManager.getInputDevice(it)
-        }.filter {
-            !it.isVirtual
+    val devices = ids.mapNotNull { deviceId: Int ->
+        inputManager.getInputDevice(deviceId)
+    }.filter { device ->
+        !device.isVirtual
+    }
+
+    val deviceMask =
+        InputDevice.SOURCE_KEYBOARD or InputDevice.SOURCE_MOUSE
+
+    val external = devices.filter { device ->
+        (device.sources and deviceMask) != 0
+    }
+
+    deviceText.text = if (external.isEmpty()) {
+        "No external device detected"
+    } else {
+        external.joinToString("\n") { device ->
+            "● ${device.name}"
         }
+    }
 
-        val external = devices.filter {
-            it.sources and (
-                android.view.InputDevice.SOURCE_KEYBOARD or
-                android.view.InputDevice.SOURCE_MOUSE
-            ) != 0
-        }
-
-        deviceText.text = if (external.isEmpty()) {
-            "No external device detected"
-        } else {
-            external.joinToString("\n") {
-                "● ${it.name}"
-            }
-        }
-
-        refreshMappingSummary()
+    refreshMappingSummary()
+}
     }
 
     private fun refreshShizukuStatus() {
@@ -496,7 +498,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     private fun makeButton(text: String): Button {
         return Button(this).apply {
             this.text = text
-            setTextColor(background)
+            setTextColor(this@MainActivity.background)
             textSize = 12f
             setBackgroundColor(accent)
         }
