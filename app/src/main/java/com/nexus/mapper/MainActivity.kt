@@ -417,32 +417,42 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
             "$configured / ${actions.size} controls configured"
     }
 
+
     private fun refreshDevices() {
-    val ids: IntArray = inputManager.getInputDeviceIds()
+        val devices = mutableListOf<InputDevice>()
 
-    val devices = ids.mapNotNull { deviceId: Int ->
-        inputManager.getInputDevice(deviceId)
-    }.filter { device ->
-        !device.isVirtual
-    }
+        for (deviceId in inputManager.inputDeviceIds) {
+            val device: InputDevice? =
+                inputManager.getInputDevice(deviceId)
 
-    val deviceMask =
-        InputDevice.SOURCE_KEYBOARD or InputDevice.SOURCE_MOUSE
-
-    val external = devices.filter { device ->
-        (device.sources and deviceMask) != 0
-    }
-
-    deviceText.text = if (external.isEmpty()) {
-        "No external device detected"
-    } else {
-        external.joinToString("\n") { device ->
-            "● ${device.name}"
+            if (device != null && !device.isVirtual) {
+                devices.add(device)
+            }
         }
+
+        val deviceMask =
+            InputDevice.SOURCE_KEYBOARD or
+            InputDevice.SOURCE_MOUSE
+
+        val external = mutableListOf<InputDevice>()
+
+        for (device in devices) {
+            if ((device.sources and deviceMask) != 0) {
+                external.add(device)
+            }
+        }
+
+        deviceText.text = if (external.isEmpty()) {
+            "No external device detected"
+        } else {
+            external.joinToString("\n") {
+                "● ${it.name}"
+            }
+        }
+
+        refreshMappingSummary()
     }
 
-    refreshMappingSummary()
-}
 
     private fun refreshShizukuStatus() {
         val connected = try {
